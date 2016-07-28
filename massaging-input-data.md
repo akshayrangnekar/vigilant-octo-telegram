@@ -10,7 +10,7 @@ The initial document provided by our data service provider was in an XML format.
 
 ## Conversion to JSON
 
-Since XML is painful to manipulate, particularly compared to JSON when using NodeJS \(or even in Swift\), as a first task we built a converter that takes the XML and converts it to JSON.
+Since XML is painful to manipulate, particularly compared to JSON when using NodeJS, as a first task we built a converter that takes the XML and converts it to JSON.
 
 While there is the extremely useful `xml2js` library, the output from that library is itself not optimal. The structure of the XML leads to repeated data, and the attribute vs content nature of XML leads to a complex JSON data structure. To simplify it down, we wrote a simple
 
