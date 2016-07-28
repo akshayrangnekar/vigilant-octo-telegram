@@ -1,6 +1,6 @@
 # Massaging Input Data
 
-See repository path `utilities/data-transform` to see files related to this. 
+See repository path `utilities/data-transform` to see files related to this document.
 
 ## Initial Data Format
 
@@ -14,7 +14,9 @@ The initial document provided by our data service provider was in an XML format.
 
 XML is painful to manipulate, particularly compared to JSON when using NodeJS. As a first task we built a converter that takes the XML and converts it to JSON.
 
-While there is the useful `xml2js` library, the output from that library is itself not optimal. The structure of the XML leads to repeated data, and the attribute vs content nature of XML leads to a complex JSON data structure. To simplify it down, we wrote a simple node.js script to convert to a flattened JSON format.
+While there is the useful `xml2js` library, the output from that library is itself not optimal. The structure of the XML leads to repeated data, and the attribute vs content nature of XML leads to a complex JSON data structure. To simplify it down, we wrote a simple node.js script to convert to a flattened JSON format. See `index.js`
 
-Analysis of data quality
+## Analysis of data quality
+
+To analyse whether the data was complete, we wrote `analysis.js`, which loops through the JSON structure and decides 
 
