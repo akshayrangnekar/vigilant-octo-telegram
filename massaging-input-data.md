@@ -1,6 +1,6 @@
 # Massaging Input Data
 
-See repository path `utilities/data-transform` to see 
+See repository path `utilities/data-transform` to see files related to this. 
 
 ## Initial Data Format
 
