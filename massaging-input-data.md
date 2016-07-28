@@ -14,9 +14,7 @@ Since XML is fairly painful to manipulate, particularly compared to JSON when us
 
 While there is the extremely useful `xml2js` library, the output from that library is itself not optimal - the structure of the XML leads to repeated data, and the attribute vs content nature of XML leads to a complex JSON data structure. To simplify it down, we wrote a simple
 
-```
+`function processXOIRelationships(obj, xoiRelationshipArray) { if (xoiRelationshipArray.length != 1 || !xoiRelationshipArray[0].xoi || !xoiRelationshipArray[0].xoi.length == 1) { // console.error('Too many xoi relationships in ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')'); if (xoiRelationshipArray.length == 1 && xoiRelationshipArray[0] == "") xoiRelationshipArray.pop(); } else { var identifier = xoiRelationshipArray[0].xoi[0].$.identifier; var type = xoiRelationshipArray[0].xoi[0].$.type; var role = xoiRelationshipArray[0].xoi[0].$.role; if (type == "CITY" && role == "parent") { obj.parent_city = identifier; } else { console.error("Bad xoi for " + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')'); } xoiRelationshipArray.pop(); }};`
 
-```
-
-## Analysis of data quality
+Analysis of data quality
 
