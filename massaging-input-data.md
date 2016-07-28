@@ -12,7 +12,300 @@ The initial document provided by our data service provider was in an XML format.
 
 XML is painful to manipulate, particularly compared to JSON when using NodeJS. As a first task we built a converter that takes the XML and converts it to JSON.
 
-While there is the useful `xml2js` library, the output from that library is itself not optimal. The structure of the XML leads to repeated data, and the attribute vs content nature of XML leads to a complex JSON data structure. To simplify it down, we wrote a simple
+While there is the useful `xml2js` library, the output from that library is itself not optimal. The structure of the XML leads to repeated data, and the attribute vs content nature of XML leads to a complex JSON data structure. To simplify it down, we wrote a simple node.js script to convert to a flattened JSON format. 
+
+```var fs = require('fs'),
+    xml2js = require('xml2js');
+
+var parser = new xml2js.Parser();
+var jsonfile = require('jsonfile')
+
+fs.readFile(__dirname + '/data.xml', function(err, data) {
+    parser.parseString(data, function (err, result) {
+        var restaurants  = result.mtpxoi.xoi;
+        var newRests = [];
+
+        for (var index in restaurants) {
+            //console.log(`Restaurant ${index}`);
+            var newRest = processMetadata(restaurants[index]);
+            
+            processMainInformation(newRest, restaurants[index]);
+            processGeolocationField(newRest, restaurants[index]);
+            processAddedValues(newRest, restaurants[index]);
+            processRelationship(newRest, restaurants[index]);
+
+            newRests.push(newRest);
+        }
+
+        writeOutput(newRests);
+        writeRemainingInput(restaurants);
+    });
+});
+
+function writeOutput(restaurants) {
+    var file = 'output.json';
+
+    jsonfile.writeFile(file, restaurants, {spaces: 2}, function(err) {
+        if (err) console.error(err);
+    })
+}
+
+function writeRemainingInput(restaurants) {
+    var file = 'remaining-input.json';
+
+    jsonfile.writeFile(file, restaurants, {spaces: 2}, function(err) {
+        if (err) console.error(err);
+    })
+}
+
+function processMetadata(origObj) {
+    var newRest = {
+        id: origObj["$"]["identifier"],
+        year: origObj["$"]["millesime"],
+        type: origObj["$"]["type"]
+    };
+
+    delete origObj["$"];
+    return newRest;
+};
+
+function processMainInformation(obj, origObj) {
+    obj.name = origObj["main_information"][0]["name"][0]["label"][0]["_"];
+    delete origObj["main_information"][0]["name"];
+
+    addMainInformationField(obj, origObj, "local_name", null, null, true);
+    addMainInformationField(obj, origObj, "main_city", null, null, true);
+    addMainInformationField(obj, origObj, "street", null, null, true);
+    addMainInformationField(obj, origObj, "postcode", null, null, true);
+    addMainInformationField(obj, origObj, "address_complement");
+    addMainInformationField(obj, origObj, "city", null, null, true);
+    addMainInformationField(obj, origObj, "state", null, null, true);
+    addMainInformationField(obj, origObj, "country", null, null, true);
+    addMainInformationField(obj, origObj, "ref_lieu", "ref_lieu", null, true);
+    addMainInformationField(obj, origObj, "ref_main", "ref_main", null, true);
+    addMainInformationField(obj, origObj, "local_phone1", "localPhone", null, true);
+    addMainInformationField(obj, origObj, "e164_phone1", "globalPhone", null, false);
+    addMainInformationField(obj, origObj, "web", "web", null, false);
+    addAccessField(obj, origObj);
+    ignoreMainInformationFields(origObj, ["int_phone1"]);
+    delete origObj.main_information;
+
+    //origObj.main_information = obj.name;
+};
+
+function addMainInformationField(obj, origObj, fieldName, newFieldName, defaultValue, required) {
+    if (newFieldName == null) newFieldName = fieldName;
+    if (origObj["main_information"][0][fieldName]) {
+        obj[newFieldName] = origObj["main_information"][0][fieldName][0]
+        delete origObj["main_information"][0][fieldName];
+    } else {
+        if (defaultValue) obj[newFieldName] = defaultValue;
+        if (required) console.error('Missing ' + fieldName + ' for ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+    }
+};
+
+function ignoreMainInformationFields(origObj, fieldNames) {
+    for (index in fieldNames) {
+        var fieldName = fieldNames[index];
+        delete origObj["main_information"][0][fieldName];
+    }
+};
+
+function addAccessField(obj, origObj) {
+    if (origObj["main_information"][0].access) {
+        obj.access_mode = origObj["main_information"][0].access[0]["$"]["mode"];
+        obj.access_description = origObj["main_information"][0].access[0]["description"][0];
+        delete origObj["main_information"][0].access;
+    } else {
+        //console.log('Missing access for ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')')
+    }
+};
+
+function processGeolocationField(obj, origObj) {
+    var geo = origObj["geoposition"];
+    if (geo) {
+        obj.location_lat = geo[0]["lat"][0];
+        obj.location_lon = geo[0]["lon"][0];
+        delete origObj["geoposition"];
+    } else {
+        console.error('Missing location for ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+    }
+};
+
+function processAddedValues(obj, origObj) {
+    var remaining = [];
+    obj.attributes = [];
+    for (var i = 0; i < origObj.added_values[0].data.length; i++) {
+        if (!processAddedValue(obj, origObj.added_values[0].data[i])) {
+            remaining.push(origObj.added_values[0].data[i]);
+        }
+    }
+
+    if (remaining.length > 0) origObj.added_values = remaining;
+    else delete origObj.added_values;
+};
+
+function processAddedValue(obj, addedValue) {
+    var valueName = addedValue.$.name;
+    var valueType = addedValue.$.type;
+    if (testCoreAddedValue(obj, valueName, valueType, addedValue)) return true;
+    if (testAttributeAddedValue(obj, valueName, valueType, addedValue)) return true;
+    if (processCookingLib(obj, valueName, valueType, addedValue)) return true;
+    if (processCookingId(obj, valueName, valueType, addedValue)) return true;
+    if (testIgnoredAddedValue(valueName, addedValue)) return true;
+    if (processDetailedLists(obj, valueName, valueType, addedValue)) return true;
+    return false;
+};
+
+var CORE_ADDED_VALUE_CRITERION = ["michelin_stars", "bib_gourmand", "main_desc", "opening_times", "facilities", "currency", "rating", "classification", "michelin_guide_selection", "price_class", "price_max_gm21", "price_min_gm21", "meal_price", "district"];
+function testCoreAddedValue(obj, valueName, valueType, attribute) {
+    if (CORE_ADDED_VALUE_CRITERION.indexOf(valueName) != -1) {
+        if (attribute.value[0]._) {
+            obj[valueName] = attribute.value[0]._;
+        } else {
+            obj[valueName] = attribute.value[0];
+        }
+        return true;
+    }
+}
+
+var ADDED_VALUE_ATTRIBUTES = ["brunch","bring_your_own_bottle","sake","valet","private_room","interesting_beer_list","interesting_wine_list","cash_only","cocktail","dim_sum","pleasant","meals_in_garden","breakfast","no_smoke","disabled_access", "small_plates", "air_conditioning"];
+function testAttributeAddedValue(obj, valueName, valueType, attribute) {
+    if (ADDED_VALUE_ATTRIBUTES.indexOf(valueName) != -1) {
+        if (attribute.value[0] == "0") return true;
+        if (attribute.value[0] == "1") {
+            if (obj.attributes.indexOf(valueName) == -1) {
+                obj.attributes.push(valueName);
+            }
+            return true;
+        }
+    }
+};
+
+function processCookingLib(obj, valueName, valueType, attribute) {
+    try {
+        if (valueName == "cooking_lib") {
+            if (attribute.item) {
+                if (attribute.item.length != 1 || attribute.item[0].value.length != 1) {
+                    console.error("Multiple cooking_id for Restaurant " + obj.name);
+                } else {
+                    obj[valueName] = attribute.item[0].value[0]._;
+                    return true;
+                }
+            } else {
+                console.error('Missing cooking_lib in ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+            }
+        }
+
+    } catch (err) {
+        console.error("Failed during " + obj.name);
+        throw err;
+    }
+};
+
+function processCookingId(obj, valueName, valueType, attribute) {
+    try {
+        if (valueName == "cooking_id") {
+            if (attribute.item && 
+                attribute.item.length == 1 && 
+                attribute.item[0].value && 
+                attribute.item[0].value.length == 1) {
+                obj[valueName] = attribute.item[0].value[0];
+                return true;
+            } else {
+                console.error('Missing cooking_id in ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+                return true;
+            }
+        }
+
+    } catch (err) {
+        console.error("Failed during " + obj.name);
+        throw err;
+    }
+};
+
+var ADDED_VALUE_IGNORED_IF_ZERO = ["ascr", "open_park", "amex", "din", "visa", "mc", "cartesi"];
+function testIgnoredAddedValue(valueName, attribute) {
+    if (valueName == "restaurant_id") {
+        if (attribute.item[0].value[0] == 1) return true;
+    }
+    if (valueName == "restaurant_lib") {
+        if (attribute.item[0].value[0]._ == "restaurant") return true;
+    }
+
+    if (ADDED_VALUE_IGNORED_IF_ZERO.indexOf(valueName) != -1) {
+        if (attribute.value[0] == 0) return true;
+    }
+};
+
+var ADDED_VALUE_DETAIL_LISTS = ["facilities_details", "meals_details", "selections_details", "credit_cards_details", "prices_details", "services_details", "desc_details"];
+function processDetailedLists(obj, valueName, valueType, attribute) {
+    if (ADDED_VALUE_DETAIL_LISTS.indexOf(valueName) != -1) {
+        var remaining = [];
+        for (var i = 0; i < attribute.data.length; i++) {
+            if (!processAddedValue(obj, attribute.data[i])) {
+                remaining.push(attribute.data[i]);
+            }
+        }
+        if (remaining.length > 0) {
+            attribute.data = remaining;
+        } else {
+            return true;
+        }
+    }
+};
+
+function processRelationship(obj, origObj) {
+    if (origObj.relationship.length != 1) {
+        console.error("Too many relationships for " + obj.name);
+    } else {
+        processMediaRelationships(obj, origObj.relationship[0].media_relationship);
+        processXOIRelationships(obj, origObj.relationship[0].xoi_relationship);
+        if (origObj.relationship[0].media_relationship.length == 0) delete origObj.relationship[0].media_relationship;
+        if (origObj.relationship[0].xoi_relationship.length == 0) delete origObj.relationship[0].xoi_relationship;
+        if (!origObj.relationship[0].media_relationship && !origObj.relationship[0].xoi_relationship) delete origObj.relationship;
+    }
+};
+
+function processMediaRelationships(obj, mediaRelationshipArray) {
+    if (mediaRelationshipArray.length == 1) {
+        if (mediaRelationshipArray[0] == "") mediaRelationshipArray.pop();
+        else if (mediaRelationshipArray[0].photo && mediaRelationshipArray[0].photo.length == 1) {
+            obj.photo = {
+                identifier: mediaRelationshipArray[0].photo[0].identifier[0],
+                author: mediaRelationshipArray[0].photo[0].author[0],
+                copyright: mediaRelationshipArray[0].photo[0].copyright[0],
+                orientation: mediaRelationshipArray[0].photo[0].orientation[0],
+                representative: mediaRelationshipArray[0].photo[0].representative[0]
+            };
+            mediaRelationshipArray.pop();
+        }
+    } else {
+        console.error('Too many photos relationships in ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+    }
+};
+
+function processXOIRelationships(obj, xoiRelationshipArray) {
+    if (xoiRelationshipArray.length != 1 || !xoiRelationshipArray[0].xoi || !xoiRelationshipArray[0].xoi.length == 1) {
+        // console.error('Too many xoi relationships in ' + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+        if (xoiRelationshipArray.length == 1 && xoiRelationshipArray[0] == "") xoiRelationshipArray.pop();
+    } else {
+        var identifier = xoiRelationshipArray[0].xoi[0].$.identifier;
+        var type =  xoiRelationshipArray[0].xoi[0].$.type;
+        var role =  xoiRelationshipArray[0].xoi[0].$.role;
+        if (type == "CITY" && role == "parent") {
+            obj.parent_city = identifier;
+        } else {
+            console.error("Bad xoi for " + obj.id + ' (' + obj.name + ' in ' + obj.main_city + ')');
+        }
+        xoiRelationshipArray.pop();
+    }
+};
+
+function isEmptyObject(obj) {
+  return !Object.keys(obj).length;
+}
+```
 
 
 Analysis of data quality
