@@ -1,5 +1,7 @@
 # Creating the server
 
+Generate the application using loopback
+
 ```bash
 mbp:Dining akshay$ slc loopback
 
@@ -38,4 +40,6 @@ I'm all done. Running npm install for you to install the required dependencies. 
  create .gitignore
  create client/README.md
 ```
+
+
 
