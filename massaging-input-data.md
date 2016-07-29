@@ -18,5 +18,11 @@ While there is the useful `xml2js` library, the output from that library is itse
 
 ## Analysis of data quality
 
-To analyse whether the data was complete, we wrote `analysis.js`, which loops through the JSON structure and decides 
+To analyse whether the data was complete, we wrote `analysis.js`, which loops through the JSON structure and performs some quick calculations. 
+
+For example, the output showed that we have 1678 restaurants, 143 of which are starred, 265 with bib gourmand and 1270 guide selections. 1219 restaurants have a district field, but 459 are missing that field. 871 restaurants are in New York, with 502  in California, and 305 in Illinois. The fields function shows the total number of restaurants that have each field - surprisingly, of the 1678 there are six missing a phone number, and six missing a postcode. 
+
+## Optimization of data
+
+The data still wasn't ready to load in. We developed a transformation application `transform.js` that works on the output data from the conversion \(`index.js`\). The application consolidates the three fields that contain ranking information \("michelin\_stars", "bib\_gourmand" and "michelin\_guide\_selection"\) into a single "score" field. Integers and floating point numbers are transformed from strings to numbers. The attributes array is flattened and the facilities string is stripped of special characters.  
 
