@@ -27,7 +27,15 @@ For example, the output showed that we have 1678 restaurants, 143 of which are s
 The data still wasn't ready to load in. We developed a transformation application `transform.js` that works on the output data from the conversion \(`index.js`\). The application consolidates the three fields that contain ranking information \("michelin\_stars", "bib\_gourmand" and "michelin\_guide\_selection"\) into a single "score" field. Integers and floating point numbers are transformed from strings to numbers. The attributes array is flattened and the facilities string is stripped of special characters.
 
 ```
-This
-Is
+var cookings = data.reduce(buildCookingDatabase, {});
+
+data = data.map(starConsolidate);
+data = data.map(parseInts);
+data = data.map(parseFloats);
+data = data.map(removeFixedFields);
+data = data.map(attributeSpaces);
+data = data.map(facilities);
+
+funcs.writeOutput('transform.json', {cuisines: cookings, restaurants: data });
 ```
 
